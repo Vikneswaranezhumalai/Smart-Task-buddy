@@ -1,1 +1,9 @@
-/build
+# Android Studio files
+.idea/
+*.iml
+.gradle/
+local.properties
+
+# Build files
+/build/
+*/build/
