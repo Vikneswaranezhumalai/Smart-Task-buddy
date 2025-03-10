@@ -5,9 +5,11 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-@Database(entities = [Task::class], version = 3)
+@Database(entities = [Task::class,Users::class], version = 4)
 abstract class TaskDatabase : RoomDatabase() {
     abstract fun taskDao(): TaskDao
+    abstract fun userDao(): UserDao
+
 
     companion object {
         // Singleton instance of the database

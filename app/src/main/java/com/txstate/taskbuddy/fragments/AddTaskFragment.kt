@@ -7,7 +7,9 @@ import android.view.ViewGroup
 import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.text.KeyboardOptions
+
+import java.time.DayOfWeek
+import java.time.temporal.TemporalAdjusters
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -32,12 +34,29 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.platform.LocalContext
+import com.google.gson.Gson
+import com.txstate.taskbuddy.apiCall.ApiConstants
+import com.txstate.taskbuddy.apiCall.Message
+import com.txstate.taskbuddy.apiCall.OpenAIRequest
+import com.txstate.taskbuddy.apiCall.RetrofitInstance
+import com.txstate.taskbuddy.database.ExtractedTask
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.encodeToString
+
 import java.util.Locale
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 
 class AddTaskFragment : Fragment() {
     private lateinit var taskViewModel: TaskViewModel
     private lateinit var voiceRecognitionLauncher: ActivityResultLauncher<Intent>
+    val priorities = listOf("High", "Medium", "Low")
+    val categories = listOf("General", "Work & Productivity", "Personal & Home", "Health & Wellness", "Finance & Planning", "Social & Leisure")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -100,11 +119,11 @@ class AddTaskFragment : Fragment() {
         var expanded by remember { mutableStateOf(false) }  // Dropdown expanded state
         var categoryExpanded by remember { mutableStateOf(false) }
         var isProcessing by remember { mutableStateOf(false) }
+        val coroutineScope = rememberCoroutineScope()
+        val context = LocalContext.current
 
 
-        val priorities = listOf("High", "Medium", "Low")
-        val categories = listOf("General", "Work & Productivity", "Personal & Home", "Health & Wellness", "Finance & Planning", "Social & Leisure")
-
+        naturalInput = "Schedule the meeting tomorrow at 2 pm"
         Surface(modifier = Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier
@@ -152,12 +171,34 @@ class AddTaskFragment : Fragment() {
                         Button(
                             onClick = {
                                 isProcessing = true
-                                // Extract data from NLP
-//                            val extractedData = processNaturalInput(naturalInput)
-//                            taskName = extractedData.first
-//                            dueDate = extractedData.second
-//                            reminderTime = extractedData.third
-                                isProcessing = false
+                                coroutineScope.launch {
+                                    isProcessing = true
+                                    try {
+                                        // ✅ Extract structured Task object from OpenAI API
+                                        println("🔹 Sending OpenAI API Request: $naturalInput")
+                                        taskViewModel.processNaturalInput(naturalInput,
+                                            onSuccess = { newTask ->
+                                                taskViewModel.addTask(context, newTask)
+                                                taskName = newTask.taskName
+                                                dueDate = newTask.dueDate
+                                                reminderTime = newTask.reminderTime
+                                                println("Task Created: $taskName")
+                                                Toast.makeText(context, "Task created successfully", Toast.LENGTH_SHORT).show()
+                                                requireActivity().supportFragmentManager.popBackStack()
+                                            },
+                                            onError = { errorMessage ->
+                                                Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+                                            }
+                                        )
+
+                                    } catch (e: Exception) {
+                                        println("Exception message:1" + e.message)
+                                        Toast.makeText(context, "Failed to process task", Toast.LENGTH_SHORT).show()
+                                    } finally {
+                                        isProcessing = false
+                                    }
+                                }
+
                             },
                             modifier = Modifier.weight(1f),
                             enabled = naturalInput.isNotEmpty()
@@ -317,6 +358,9 @@ class AddTaskFragment : Fragment() {
             }
         }
     }
+
+
+
 
 
 

@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     id("kotlin-kapt")
+    kotlin("plugin.serialization") version "1.9.10"
 }
 
 android {
@@ -48,6 +49,13 @@ android {
 dependencies {
 
     //implementation ("androidx.fragment:fragment-ktx:1.8.5") // For Fragment and Kotlin extensions
+    //Retrofit Api Call
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation ("com.squareup.okhttp3:logging-interceptor:4.9.3'")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
+
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:5.0.0-alpha.2")
     // Jetpack Compose
     implementation ("androidx.compose.ui:ui:1.6.0")
     implementation ("androidx.compose.material:material:1.6.0")
