@@ -10,13 +10,13 @@ class TaskRepository(private val taskDao: TaskDao) {
     }
 
     // Get all tasks
-    fun getAllTasks(): LiveData<List<Task>> {
-        return taskDao.getAllTasks()
+    fun getAllTasks(userId: Int): LiveData<List<Task>> {
+        return taskDao.getAllTasks(userId)
     }
 
     // Get Completed tasks
-    fun getCompletedTask(): LiveData<List<Task>> {
-        return taskDao.getCompletedTasks()
+    fun getCompletedTask(userId: Int): LiveData<List<Task>> {
+        return taskDao.getCompletedTasks(userId)
     }
 
     // Update a task

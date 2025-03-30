@@ -31,7 +31,6 @@ class MainActivity : AppCompatActivity() {
             authManager = AuthManager(this, userRepository)
             var activtyStack = "DEFALUT";
             // Check if the user is logged in
-            authManager.saveLoginState(false)
             if (authManager.isLoggedIn()) {
                 // Navigate to task list
                 activtyStack = "LIST_FRAGMENT"
@@ -39,42 +38,56 @@ class MainActivity : AppCompatActivity() {
             } else {
                 activtyStack = "LOGIN_FRAGMENT"
             }
-            userViewModel.insertDummyUser()
-            TaskBuddyTheme  {
-                    FragmentHost(fragmentManager = supportFragmentManager,  activtyStack)
+           // userViewModel.deleteAllUsers()
+            TaskBuddyTheme {
+                FragmentHost(fragmentManager = supportFragmentManager, activtyStack)
+            }
+        }
+    }
+
+    fun logoutAndClearToLogin() {
+        authManager.logout()
+
+        // Clear the entire fragment back stack first
+        supportFragmentManager.popBackStack(null, FragmentManager.POP_BACK_STACK_INCLUSIVE)
+
+        // Explicitly replace the current fragment with LoginFragment
+        supportFragmentManager.beginTransaction()
+            .replace(R.id.fragment_container, LoginFragment())
+            .commit()
+    }
+
+
+    @Composable
+    fun FragmentHost(fragmentManager: FragmentManager, activtyStack: String) {
+        AndroidView(
+            factory = { context ->
+                FragmentContainerView(context).apply {
+                    id = R.id.fragment_container
+                }
+            },
+            modifier = Modifier.fillMaxSize()
+        ) { containerView ->
+            val fragmentManager =
+                (containerView.context as AppCompatActivity).supportFragmentManager
+            // Initialize the first fragment
+            if (fragmentManager.findFragmentById(containerView.id) == null) {
+                when (activtyStack) {
+                    "DEFALUT",
+                    "LIST_FRAGMENT" -> {
+                        fragmentManager.beginTransaction()
+                            .add(containerView.id, TaskListFragment()) // Start with FragmentOne
+                            .commit()
+                    }
+
+                    "LOGIN_FRAGMENT" -> {
+                        fragmentManager.beginTransaction()
+                            .add(containerView.id, LoginFragment()) // Add LoginFragment
+                            .commit()
+                    }
+                }
             }
         }
     }
 
 }
-
-@Composable
-fun FragmentHost(fragmentManager: FragmentManager, activtyStack: String) {
-    AndroidView(
-        factory = { context ->
-            FragmentContainerView(context).apply {
-                id = View.generateViewId() // Generate a unique ID for the container
-            }
-        },
-        modifier = Modifier.fillMaxSize()
-    ) { containerView ->
-        val fragmentManager = (containerView.context as AppCompatActivity).supportFragmentManager
-        // Initialize the first fragment
-        if (fragmentManager.findFragmentById(containerView.id) == null) {
-            when (activtyStack) {
-                "DEFALUT" ,
-                "LIST_FRAGMENT" ->
-                    {
-                    fragmentManager.beginTransaction()
-                        .add(containerView.id, TaskListFragment()) // Start with FragmentOne
-                        .commit()
-                }
-                "LOGIN_FRAGMENT" -> {
-                    fragmentManager.beginTransaction()
-                        .add(containerView.id, LoginFragment()) // Add LoginFragment
-                        .commit()
-                }
-            }
-    }
-}
-    }

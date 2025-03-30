@@ -36,6 +36,7 @@ import com.txstate.taskbuddy.TaskViewModel
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.core.app.ActivityCompat
@@ -43,18 +44,28 @@ import androidx.core.content.ContextCompat
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
+import com.txstate.taskbuddy.database.AuthManager
+import com.txstate.taskbuddy.database.TaskDatabase
+import com.txstate.taskbuddy.database.UserRepository
 import com.txstate.taskbuddy.notifications.TaskNotificationWorker
 import java.util.concurrent.TimeUnit
 
 
 class TaskListFragment : Fragment(){
     private lateinit var taskViewModel: TaskViewModel
+    private lateinit var authManager: AuthManager
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
         taskViewModel = ViewModelProvider(this).get(TaskViewModel::class.java)
+        // Initialize AuthManager with UserRepository
+        val userRepository =
+            UserRepository(TaskDatabase.getDatabase(requireContext()).userDao())
+        authManager = AuthManager(requireContext(), userRepository)
+
 
         // Check and request notification permission
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -108,18 +119,20 @@ class TaskListFragment : Fragment(){
     @Composable
     fun TaskListFragmentContent() {
         val taskList by taskViewModel.getAllTasks.observeAsState(initial = emptyList())
+        val user = authManager.getLoggedInUser()
         Surface(modifier = Modifier.fillMaxHeight()) {
             Column {
                 // Toolbar
                 CommonToolbar(
-                    title = "Task Buddy",
+                    title = "Hey " + user?.name,
                     onBackButtonClick = null,
-                    onCompletedTasksClick = {
+                    onCompletedTasksClick =null,
+                    onSettingsClick = {
                         // Navigate to Completed Task History Screen
-                        val taskHistoryFragment = TaskHistoryFragment()
+                        val settingFragment = SettingFragment()
                         val containerId = (view?.parent as? ViewGroup)?.id ?: 0
                         requireActivity().supportFragmentManager.beginTransaction()
-                            .replace(containerId, taskHistoryFragment)
+                            .replace(containerId, settingFragment)
                             .addToBackStack(null)
                             .commit()
                     }

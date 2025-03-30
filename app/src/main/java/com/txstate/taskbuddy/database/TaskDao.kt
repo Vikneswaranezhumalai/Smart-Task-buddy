@@ -12,11 +12,11 @@ interface TaskDao {
     @Insert
      fun insertTask(task: Task)
 
-    @Query("SELECT * FROM task_table where priority != 'Completed'")
-    fun getAllTasks(): LiveData<List<Task>>
+    @Query("SELECT * FROM task_table WHERE priority != 'Completed' AND userId = :userId")
+    fun getAllTasks(userId: Int): LiveData<List<Task>>
 
-    @Query("SELECT * FROM task_table where priority == 'Completed'")
-    fun getCompletedTasks(): LiveData<List<Task>>
+    @Query("SELECT * FROM task_table WHERE priority == 'Completed' AND userId = :userId")
+    fun getCompletedTasks(userId: Int): LiveData<List<Task>>
 
     @Update
      fun updateTask(task: Task)

@@ -4,8 +4,10 @@ package com.txstate.taskbuddy
 import android.app.Application
 import android.content.Context
 import android.util.Log
+import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.OneTimeWorkRequestBuilder
@@ -15,6 +17,7 @@ import com.txstate.taskbuddy.apiCall.ApiConstants
 import com.txstate.taskbuddy.apiCall.Message
 import com.txstate.taskbuddy.apiCall.OpenAIRequest
 import com.txstate.taskbuddy.apiCall.RetrofitInstance
+import com.txstate.taskbuddy.database.AuthManager
 import com.txstate.taskbuddy.database.ExtractedTask
 import com.txstate.taskbuddy.database.Task
 import com.txstate.taskbuddy.database.TaskDatabase
@@ -42,21 +45,39 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
     private val userRepository: UserRepository
     val getAllTasks: LiveData<List<Task>>
     val getCompletedTasks: LiveData<List<Task>>
+    private lateinit var authManager: AuthManager
+    private var userId = -1;
+
 
     init {
         val taskDatabase = TaskDatabase.getDatabase(application)
         taskRepository = TaskRepository(taskDatabase.taskDao())
         userRepository = UserRepository(taskDatabase.userDao())
-        getAllTasks = taskRepository.getAllTasks()
-        getCompletedTasks = taskRepository.getCompletedTask()
-    }
-    fun insertDummyUser() {
-        val dummyUser = Users(email = "vezhumal@gmail.com", password = "vezhumal")
-        // Launch a coroutine to insert the user into the database
-        GlobalScope.launch {
-            val userId = userRepository.insert(dummyUser)
-            Log.d("UserViewModel", "Inserted dummy user with ID: $userId")
+        authManager = AuthManager(application, userRepository);
+        val loggedInUser = authManager.getLoggedInUser()
+        if (loggedInUser != null) {
+            userId = loggedInUser.id
+            Log.d("UserViewModel", "userId: $userId")
+            getAllTasks = taskRepository.getAllTasks(userId)
+            Log.d("UserViewModel", "getAllTasks: $getAllTasks")
+            getCompletedTasks = taskRepository.getCompletedTask(userId)
+        } else {
+            Log.d("UserViewModel", "EMPTY:")
+            // Initialize with empty LiveData or default values
+            getAllTasks = MutableLiveData(emptyList())
+            getCompletedTasks = MutableLiveData(emptyList())
+
+            Log.d("UserViewModel", "No user logged in")
         }
+
+    }
+    fun deleteAllUsers() {
+        GlobalScope.launch {
+            userRepository.deleteAll()
+        }
+    }
+    fun getLoggedInUser(): Users? {
+        return authManager.getLoggedInUser()
     }
 
     fun addTask(context: Context, task: Task) {
@@ -224,17 +245,22 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 val dueDate = validateAndFixDate(extractedTask.dueDate)
-
-                val finalTask = Task(
-                    taskName = extractedTask.taskName.ifBlank { "Untitled Task" },
-                    description = extractedTask.description.ifBlank { "No description" },
-                    category = extractedTask.category.ifBlank { "General" },
-                    priority = extractedTask.priority.ifBlank { "Medium" },
-                    dueDate = dueDate,
-                    reminderTime = extractedTask.reminderTime.ifBlank { "12:00" }
-                )
-
-                onSuccess(finalTask)
+                val loggedInUser = authManager.getLoggedInUser();
+                if (loggedInUser != null) {
+                    val finalTask = Task(
+                        taskName = extractedTask.taskName.ifBlank { "Untitled Task" },
+                        description = extractedTask.description.ifBlank { "No description" },
+                        category = extractedTask.category.ifBlank { "General" },
+                        priority = extractedTask.priority.ifBlank { "Medium" },
+                        dueDate = dueDate,
+                        reminderTime = extractedTask.reminderTime.ifBlank { "12:00" },
+                        userId = loggedInUser.id
+                    )
+                    onSuccess(finalTask)
+                } else {
+                    // Clearly handle scenario if no user is logged in.
+                    onError( "No user logged in. Please log in again.")
+                }
 
             } catch (e: Exception) {
                 println(" OpenAI API Error: ${e.message}")

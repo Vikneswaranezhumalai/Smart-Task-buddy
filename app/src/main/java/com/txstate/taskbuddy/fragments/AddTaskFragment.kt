@@ -5,11 +5,9 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-
-import java.time.DayOfWeek
-import java.time.temporal.TemporalAdjusters
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -18,6 +16,7 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -27,110 +26,167 @@ import com.txstate.taskbuddy.TaskViewModel
 import com.txstate.taskbuddy.database.Task
 import com.txstate.taskbuddy.ui.theme.components.CommonToolbar
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.platform.LocalContext
-import com.google.gson.Gson
-import com.txstate.taskbuddy.apiCall.ApiConstants
-import com.txstate.taskbuddy.apiCall.Message
-import com.txstate.taskbuddy.apiCall.OpenAIRequest
-import com.txstate.taskbuddy.apiCall.RetrofitInstance
-import com.txstate.taskbuddy.database.ExtractedTask
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.encodeToString
-
 import java.util.Locale
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-
 
 class AddTaskFragment : Fragment() {
     private lateinit var taskViewModel: TaskViewModel
     private lateinit var voiceRecognitionLauncher: ActivityResultLauncher<Intent>
+    private val naturalInputState = mutableStateOf("")
+    private val isProcessingState = mutableStateOf(false)
     val priorities = listOf("High", "Medium", "Low")
     val categories = listOf("General", "Work & Productivity", "Personal & Home", "Health & Wellness", "Finance & Planning", "Social & Leisure")
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // ✅ Properly initialize voiceRecognitionLauncher before fragment reaches RESUMED state
         voiceRecognitionLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == Activity.RESULT_OK) {
-                val spokenText = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.get(0)
-                spokenText?.let { processVoiceInput(it) }
+                val spokenText = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull().orEmpty()
+                println("🔹 Voice Recognition Result: $spokenText")
+                naturalInputState.value = spokenText
+                processVoiceInput(spokenText)
             }
         }
     }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        taskViewModel = ViewModelProvider(this).get(TaskViewModel::class.java)
-
-
+        taskViewModel = ViewModelProvider(this)[TaskViewModel::class.java]
         return ComposeView(requireContext()).apply {
             setContent {
-                Column {
-                    CommonToolbar(
-                        title = "Add Task",
-                        navigationIcon = Icons.Default.ArrowBack,
-                        onBackButtonClick = {
-                            requireActivity().supportFragmentManager.popBackStack()
-                        },
-                        onCompletedTasksClick = null
-                    )
-                    AddTaskFragmentContent()
+                val isProcessing by isProcessingState
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        CommonToolbar(
+                            title = "Add Task",
+                            navigationIcon = Icons.Default.ArrowBack,
+                            onBackButtonClick = {
+                                requireActivity().supportFragmentManager.popBackStack()
+                            },
+                            onCompletedTasksClick = null
+                        )
+                        AddTaskFragmentContent()
+                    }
+                    println("Loading state chek: " + isProcessingState.value)
+                    if (isProcessing) {
+                        println("Voice Input Received: isProcessingState true")
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.3f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                color = MaterialTheme.colors.primary,
+                                strokeWidth = 4.dp,
+                                modifier = Modifier.size(48.dp)
+                            )
+                        }
+                    } else {
+                        println("Loading state: isProcessingState false")
+                    }
+
                 }
             }
         }
     }
-    // ✅ Function to Start Voice Recognition
+
     private fun startVoiceRecognition() {
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
         }
-        voiceRecognitionLauncher.launch(intent) // Use the properly initialized launcher
+        voiceRecognitionLauncher.launch(intent)
     }
 
-    // ✅ Function to Process the Spoken Task Input
     private fun processVoiceInput(input: String) {
         println("Voice Input Received: $input")
-        // Here you can process the text with NLP and update the UI
+        isProcessingState.value = true
+        viewLifecycleOwner.lifecycleScope.launch {
+
+            try {
+                taskViewModel.processNaturalInput(input,
+                    onSuccess = { newTask ->
+                        taskViewModel.addTask(requireContext(), newTask)
+                        Toast.makeText(context, "Task created successfully", Toast.LENGTH_SHORT).show()
+                        requireActivity().supportFragmentManager.popBackStack()
+                    },
+                    onError = { errorMessage ->
+                        Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+                    }
+                )
+            } catch (e: Exception) {
+                Toast.makeText(context, "Failed to process task", Toast.LENGTH_SHORT).show()
+            } finally {
+            }
+        }
     }
+
+    private fun processTaskInput(
+        input: String,
+        coroutineScope: CoroutineScope,
+        context: Context,
+        taskViewModel: TaskViewModel,
+        onComplete: (Task) -> Unit
+    ) {
+        isProcessingState.value = true
+        coroutineScope.launch {
+
+            try {
+                taskViewModel.processNaturalInput(input,
+                    onSuccess = { newTask ->
+                        taskViewModel.addTask(context, newTask)
+                        Toast.makeText(context, "Task created successfully", Toast.LENGTH_SHORT).show()
+                        onComplete(newTask)
+                    },
+                    onError = { errorMessage ->
+                        Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+                    }
+                )
+            } catch (e: Exception) {
+                Toast.makeText(context, "Failed to process task", Toast.LENGTH_SHORT).show()
+            } finally {
+            }
+        }
+    }
+
     @OptIn(ExperimentalMaterialApi::class)
     @Composable
     fun AddTaskFragmentContent() {
-        var naturalInput by remember { mutableStateOf("") }
+
+        var naturalInput by naturalInputState
+        val isProcessing = isProcessingState.value
         var taskName by remember { mutableStateOf("") }
         var description by remember { mutableStateOf("") }
-        var priority by remember { mutableStateOf("Medium") }// Use string for dropdown
-        var category by remember { mutableStateOf("General") } // Default category
+        var priority by remember { mutableStateOf("Medium") }
+        var category by remember { mutableStateOf("General") }
         var dueDate by remember { mutableStateOf("") }
         var reminderTime by remember { mutableStateOf("") }
-        var expanded by remember { mutableStateOf(false) }  // Dropdown expanded state
+        var expanded by remember { mutableStateOf(false) }
         var categoryExpanded by remember { mutableStateOf(false) }
-        var isProcessing by remember { mutableStateOf(false) }
         val coroutineScope = rememberCoroutineScope()
         val context = LocalContext.current
 
-
-        naturalInput = "Schedule the meeting tomorrow at 2 pm"
         Surface(modifier = Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier
                     .padding(16.dp)
                     .fillMaxSize()
             ) {
-                // 🔹 Voice Input + NLP Task Entry (Better UI)
                 Text("Task Input", style = MaterialTheme.typography.h6)
 
                 Column(
@@ -154,9 +210,10 @@ class AddTaskFragment : Fragment() {
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // 🎤 Voice Input Button
                         Button(
-                            onClick = { startVoiceRecognition() },
+                            onClick = {
+                                isProcessingState.value = true
+                                startVoiceRecognition() },
                             modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.buttonColors(backgroundColor = MaterialTheme.colors.secondary)
                         ) {
@@ -167,54 +224,31 @@ class AddTaskFragment : Fragment() {
 
                         Spacer(modifier = Modifier.width(8.dp))
 
-                        // ✅ NLP Processing Button
                         Button(
                             onClick = {
-                                isProcessing = true
-                                coroutineScope.launch {
-                                    isProcessing = true
-                                    try {
-                                        // ✅ Extract structured Task object from OpenAI API
-                                        println("🔹 Sending OpenAI API Request: $naturalInput")
-                                        taskViewModel.processNaturalInput(naturalInput,
-                                            onSuccess = { newTask ->
-                                                taskViewModel.addTask(context, newTask)
-                                                taskName = newTask.taskName
-                                                dueDate = newTask.dueDate
-                                                reminderTime = newTask.reminderTime
-                                                println("Task Created: $taskName")
-                                                Toast.makeText(context, "Task created successfully", Toast.LENGTH_SHORT).show()
-                                                requireActivity().supportFragmentManager.popBackStack()
-                                            },
-                                            onError = { errorMessage ->
-                                                Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
-                                            }
-                                        )
-
-                                    } catch (e: Exception) {
-                                        println("Exception message:1" + e.message)
-                                        Toast.makeText(context, "Failed to process task", Toast.LENGTH_SHORT).show()
-                                    } finally {
-                                        isProcessing = false
+                                processTaskInput(
+                                    input = naturalInput,
+                                    coroutineScope = coroutineScope,
+                                    context = context,
+                                    taskViewModel = taskViewModel,
+                                    onComplete = { newTask ->
+                                        taskName = newTask.taskName
+                                        dueDate = newTask.dueDate
+                                        reminderTime = newTask.reminderTime
+                                        requireActivity().supportFragmentManager.popBackStack()
                                     }
-                                }
-
+                                )
                             },
                             modifier = Modifier.weight(1f),
                             enabled = naturalInput.isNotEmpty()
                         ) {
-                            if (isProcessing) {
-                                CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                            } else {
                                 Text("Process Task")
-                            }
                         }
                     }
                 }
 
-
                 Spacer(modifier = Modifier.height(8.dp))
-                // Task Name Input
+
                 OutlinedTextField(
                     value = taskName,
                     onValueChange = { taskName = it },
@@ -224,7 +258,6 @@ class AddTaskFragment : Fragment() {
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Description Input
                 OutlinedTextField(
                     value = description,
                     onValueChange = { description = it },
@@ -234,7 +267,6 @@ class AddTaskFragment : Fragment() {
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Priority Dropdown Menu
                 ExposedDropdownMenuBox(
                     expanded = expanded,
                     onExpandedChange = { expanded = it }
@@ -245,8 +277,8 @@ class AddTaskFragment : Fragment() {
                         label = { Text("Priority") },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { expanded = !expanded }, // Toggle dropdown when clicked
-                        readOnly = true,  // Make it read-only for selection
+                            .clickable { expanded = !expanded },
+                        readOnly = true,
                         trailingIcon = {
                             Icon(
                                 imageVector = Icons.Default.ArrowDropDown,
@@ -256,7 +288,6 @@ class AddTaskFragment : Fragment() {
                         }
                     )
 
-                    // Dropdown Menu for Priority
                     ExposedDropdownMenu(
                         expanded = expanded,
                         onDismissRequest = { expanded = false }
@@ -274,7 +305,6 @@ class AddTaskFragment : Fragment() {
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Category Dropdown
                 ExposedDropdownMenuBox(
                     expanded = categoryExpanded,
                     onExpandedChange = { categoryExpanded = it }
@@ -312,7 +342,6 @@ class AddTaskFragment : Fragment() {
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Due Date Input
                 OutlinedTextField(
                     value = dueDate,
                     onValueChange = { dueDate = it },
@@ -322,7 +351,6 @@ class AddTaskFragment : Fragment() {
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Reminder Time Input
                 OutlinedTextField(
                     value = reminderTime,
                     onValueChange = { reminderTime = it },
@@ -332,21 +360,20 @@ class AddTaskFragment : Fragment() {
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
+                val loggedInUser = taskViewModel.getLoggedInUser()
 
-                // Add Task Button
                 Button(
                     onClick = {
-                        // Handle the task creation logic here
                         val newTask = Task(
                             taskName = taskName,
                             description = description,
-                            priority = priority,  // String priority value
+                            priority = priority,
                             dueDate = dueDate,
-                            category = category, // Added category field
-                            reminderTime = reminderTime
+                            category = category,
+                            reminderTime = reminderTime,
+                            userId = loggedInUser?.id ?: 0
                         )
                         taskViewModel.addTask(requireContext(), newTask)
-                        println("Task Created: $taskName")
                         Toast.makeText(context, "Task created successfully", Toast.LENGTH_SHORT).show()
                         requireActivity().supportFragmentManager.popBackStack()
                     },
@@ -358,11 +385,4 @@ class AddTaskFragment : Fragment() {
             }
         }
     }
-
-
-
-
-
-
-
 }

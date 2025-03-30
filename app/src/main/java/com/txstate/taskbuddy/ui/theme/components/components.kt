@@ -4,6 +4,7 @@ package com.txstate.taskbuddy.ui.theme.components
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
@@ -13,7 +14,8 @@ fun CommonToolbar(
     title: String,
     onBackButtonClick: (() -> Unit)? = null,
     navigationIcon: ImageVector? = null,
-    onCompletedTasksClick: (() -> Unit)? = null // Add optional click handler for the completed tasks icon
+    onCompletedTasksClick: (() -> Unit)? = null , // Add optional click handler for the completed tasks icon
+    onSettingsClick: (() -> Unit)? = null
 ) {
     TopAppBar(
         title = {
@@ -43,7 +45,17 @@ fun CommonToolbar(
                     )
                 }
             }
+            if (onSettingsClick != null) {
+                IconButton(onClick = onSettingsClick) {
+                    Icon(
+                        imageVector = Icons.Filled.Settings,
+                        contentDescription = "Settings"
+                    )
+                }
+            }
         }
+
+
     )
 }
 
