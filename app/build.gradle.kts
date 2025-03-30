@@ -21,9 +21,11 @@ android {
                 argument("room.schemaLocation", "$projectDir/schemas")
             }
         }
+        buildConfigField("String", "OPENAI_API_KEY", "\"${project.properties["openai_api_key"]}\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
+
 
     buildTypes {
         release {
@@ -43,7 +45,9 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
+
 }
 
 dependencies {
