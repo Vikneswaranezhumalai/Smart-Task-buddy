@@ -18,6 +18,7 @@ import com.txstate.taskbuddy.apiCall.Message
 import com.txstate.taskbuddy.apiCall.OpenAIRequest
 import com.txstate.taskbuddy.apiCall.RetrofitInstance
 import com.txstate.taskbuddy.database.AuthManager
+import com.txstate.taskbuddy.database.CategorySummary
 import com.txstate.taskbuddy.database.ExtractedTask
 import com.txstate.taskbuddy.database.Task
 import com.txstate.taskbuddy.database.TaskDatabase
@@ -27,6 +28,8 @@ import com.txstate.taskbuddy.database.Users
 import com.txstate.taskbuddy.notifications.TaskNotificationWorker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
@@ -47,6 +50,12 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
     val getCompletedTasks: LiveData<List<Task>>
     private lateinit var authManager: AuthManager
     private var userId = -1;
+    // Publicly readable, internally mutable
+    private val _badgeUnlocked = MutableStateFlow(false)
+    val badgeUnlocked: StateFlow<Boolean> = _badgeUnlocked
+    val _unlockedBadges = MutableStateFlow<List<String>>(emptyList())
+    val unlockedBadges: StateFlow<List<String>> = _unlockedBadges
+
 
 
     init {
@@ -89,19 +98,45 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
         // Schedule notification using WorkManager
         scheduleTaskNotification(context, task)
     }
+    fun refreshBadgeStatus(userId: Int) {
+        GlobalScope.launch {
+            val count = taskRepository.getCompletedTaskCount(userId)
+            val badges = mutableListOf<String>()
+
+            if (count >= 10) badges.add("10 Tasks")
+            if (count >= 20) badges.add("20 Tasks")
+            if (count >= 50) badges.add("50 Tasks")
+            if (count >= 100) badges.add("100 Tasks")
+
+            _unlockedBadges.value = badges
+        }
+    }
+
 
     // LiveData for a single task
     fun getTaskById(taskId: Int): LiveData<Task> {
         return taskRepository.getTaskById(taskId)
     }
 
-    fun updateTaskStatus(task: Task) {
-        // Update task status in the database (e.g., mark it as completed)
+    fun updateTaskStatus(task: Task, context: Context) {
         GlobalScope.launch {
             taskRepository.updateTask(task)
+            val previousCount = taskRepository.getCompletedTaskCount(task.userId) - 1
+            val currentCount = taskRepository.getCompletedTaskCount(task.userId)
+
+            val newBadge = when {
+                previousCount < 10 && currentCount >= 10 -> "10 Tasks"
+                previousCount < 20 && currentCount >= 20 -> "20 Tasks"
+                previousCount < 50 && currentCount >= 50 -> "50 Tasks"
+                previousCount < 100 && currentCount >= 100 -> "100 Tasks"
+                else -> null
+            }
+            if (newBadge != null) {
+                _badgeUnlocked.value = true
+                TaskNotificationWorker.sendBadgeUnlockedNotification(context, newBadge)
+            }
         }
     }
-
     fun deleteTask(task: Task) {
         // Delete the task from the database
         GlobalScope.launch {
@@ -158,6 +193,18 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
             delayInMillis
         }
     }
+    fun fetchFrequentCategories(onResult: (List<String>) -> Unit) {
+        viewModelScope.launch {
+            val lastMonthDate = LocalDate.now().minusDays(30).format(DateTimeFormatter.ISO_DATE)
+
+            val topCategories = withContext(Dispatchers.IO) {
+                taskRepository.getFrequentCategories(lastMonthDate)
+            }.map { it.category }
+
+            onResult(topCategories)
+        }
+    }
+
 
     // ✅ Function to Process Task using OpenAI
     fun processNaturalInput(input: String, onSuccess: (Task) -> Unit, onError: (String) -> Unit) {
@@ -268,104 +315,148 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+    private val _recommendedTasks = MutableStateFlow<List<Task>>(emptyList())
+    val recommendedTasks: StateFlow<List<Task>> = _recommendedTasks
 
-//    fun recommendTasks(onSuccess: (List<Task>) -> Unit, onError: (String) -> Unit) {
-//        viewModelScope.launch {
-//            try {
-//                println("🔹 Fetching Recommended Tasks...")
-//
-//                val todayDate = LocalDate.now().format(DateTimeFormatter.ISO_DATE)
-//                val lastMonthDate = LocalDate.now().minusDays(30).format(DateTimeFormatter.ISO_DATE)
-//
-//                // ✅ Step 1: Fetch High-Priority & Frequently Done Tasks
-//                val highPriorityTasks = withContext(Dispatchers.IO) {
-//                    //taskRepository.getHighPriorityTasks(todayDate)
-//
-//                }
-//
-//                val frequentCategories = withContext(Dispatchers.IO) {
-//                    taskDao.getFrequentCategories(lastMonthDate)
-//                }.map { it.category }
-//
-//                val recentCompletedTasks = withContext(Dispatchers.IO) {
-//                    taskDao.getRecentCompletedTasks()
-//                }
-//
-//                // ✅ Step 2: Fetch AI-Generated Task Recommendations (10 Tasks)
-//                val aiGeneratedTasks = fetchAITaskRecommendations(frequentCategories)
-//
-//                // ✅ Step 3: Merge All Recommendations
-//                val recommendedTasks = (highPriorityTasks + aiGeneratedTasks).distinct().take(10)
-//
-//                if (recommendedTasks.isNotEmpty()) {
-//                    onSuccess(recommendedTasks)
-//                } else {
-//                    onError("No recommended tasks available.")
-//                }
-//
-//            } catch (e: Exception) {
-//                println("❌ Task Recommendation Error: ${e.message}")
-//                onError("Failed to fetch recommendations")
-//            }
-//        }
-//    }
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage
 
-    // ✅ Fetch 10 Task Recommendations from OpenAI
-    private suspend fun fetchAITaskRecommendations(categories: List<String>): List<Task> {
+    fun loadRecommendations() {
+        recommendTasksIncludingAll(
+            onSuccess = { tasks -> _recommendedTasks.value = tasks },
+            onError = { error -> _errorMessage.value = error }
+        )
+    }
+
+    fun recommendTasksIncludingAll(
+        onSuccess: (List<Task>) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                println("🔹 Fetching All Tasks and Recommendations...")
+
+                val lastMonthDate = LocalDate.now().minusDays(30).format(DateTimeFormatter.ISO_DATE)
+
+                // ✅ Step 1: Get all tasks from DB
+                val allTasks = withContext(Dispatchers.IO) {
+                    taskRepository.getCompletedTasks(userId) // make sure this DAO method exists
+                }
+
+                // ✅ Step 2: Get frequently used categories
+
+                val frequentCategories = withContext(Dispatchers.IO) {
+                    taskRepository.getFrequentCategories(lastMonthDate)
+                    }
+
+                // ✅ Step 3: Generate AI recommendations
+                val aiGeneratedTasks = fetchAITaskRecommendations(frequentCategories)
+
+                // ✅ Step 4: Combine and return
+                val combinedTasks = (allTasks + aiGeneratedTasks)
+                    .distinctBy { it.taskName }
+                    .shuffled()
+
+                if (combinedTasks.isNotEmpty()) {
+                    onSuccess(combinedTasks)
+                } else {
+                    onError("No tasks or recommendations found.")
+                }
+
+            } catch (e: Exception) {
+                println("❌ Error combining tasks: ${e.message}")
+                onError("Something went wrong.")
+            }
+        }
+    }
+
+
+    private suspend fun fetchAITaskRecommendations(categories: List<CategorySummary>): List<Task> {
         return withContext(Dispatchers.IO) {
             try {
+                println("\uD83D\uDD39 Fetching AI Tasks from OpenAI GPT API...")
+
                 val request = OpenAIRequest(
                     model = ApiConstants.OpenAIModels.GPT_4_TURBO,
                     messages = listOf(
                         Message("system", """
-                            You are a task recommendation AI. 
-                            Generate **10 personalized tasks** based on these categories: ${categories.joinToString()}.
-                            **Each task should include**:
-                            - **Task Name** (Max 5 words)
-                            - **Short Description**
-                            - **Category** (One of: General, Work & Productivity, Personal & Home, Health & Wellness, Finance & Planning, Social & Leisure)
-                            - **Priority** (High, Medium, Low)
-                            - **Due Date** (Format: YYYY-MM-DD)
-                            - **Reminder Time** (Format: HH:mm)
-                            - Only return valid JSON.
-                        """.trimIndent()),
-
+                        You are a task recommendation AI. 
+                        Generate 3 personalized tasks based on these categories: ${categories.joinToString()}.
+                        Each task must include:
+                        - Task Name (max 5 words)
+                        - Short Description
+                        - Category (General, Work & Productivity, Personal & Home, Health & Wellness, Finance & Planning, Social & Leisure)
+                        - Priority (High, Medium, Low)
+                        - Due Date (YYYY-MM-DD)
+                        - Reminder Time (HH:mm)
+                        Return only valid JSON, no markdown or explanation. Do not include trailing commas.
+                    """.trimIndent()),
                         Message("user", """
-                            Generate 10 tasks in JSON format:
-                            ```json
-                            [
-                                {
-                                    "taskName": "<task_name>",
-                                    "description": "<task_description>",
-                                    "category": "<category>",
-                                    "priority": "<priority>",
-                                    "dueDate": "<yyyy-MM-dd>",  
-                                    "reminderTime": "<HH:mm>"
-                                }
-                            ]
-                            ```
-                        """.trimIndent())
+                        Format:
+                        [
+                            {
+                                "taskName": "Morning Walk",
+                                "description": "Walk for 20 minutes",
+                                "category": "Health & Wellness",
+                                "priority": "Medium",
+                                "dueDate": "2025-04-03",
+                                "reminderTime": "07:00"
+                            }
+                        ]
+                    """.trimIndent())
                     ),
-                    max_tokens = 200,
+                    max_tokens = 1000,
                     temperature = 0.4
                 )
 
-                println("🔹 Fetching 10 AI Tasks from OpenAI GPT API...")
-
                 val response = RetrofitInstance.api.getCompletion(request)
+                val content = response.choices.firstOrNull()?.message?.content
 
-                println("🔹 AI Response: $response")
+                if (content.isNullOrBlank()) {
+                    println("\u26A0\uFE0F OpenAI returned empty content.")
+                    return@withContext emptyList()
+                }
 
-                val extractedJson = extractJsonContent(response.choices.firstOrNull()?.message?.content ?: "[]")
+                println("\uD83D\uDD39 Raw GPT Response:\n$content")
 
-                Json { ignoreUnknownKeys = true }.decodeFromString<List<Task>>(extractedJson)
+                // Step 1: Clean GPT JSON (remove markdown/code block/trailing commas)
+                val cleanedJson = extractJsonContentImproved(content)
+
+                println("\uD83D\uDD39 Extracted JSON:\n$cleanedJson")
+
+                // Step 2: Parse JSON to List<ExtractedTask>
+                val extractedTasks = try {
+                    Json.decodeFromString<List<ExtractedTask>>(cleanedJson)
+                } catch (e: Exception) {
+                    println("\u26A0\uFE0F Not an array. Trying single object: ${e.message}")
+                    try {
+                        listOf(Json.decodeFromString<ExtractedTask>(cleanedJson))
+                    } catch (e2: Exception) {
+                        println("\u274C Still failed parsing: ${e2.message}")
+                        return@withContext emptyList()
+                    }
+                }
+
+                return@withContext extractedTasks.map {
+                    println("\u2705 Parsed Task: ${Json.encodeToString(it)}")
+                    Task(
+                        userId = 0, // TODO: Replace with actual user ID
+                        taskName = it.taskName,
+                        description = it.description,
+                        category = it.category,
+                        priority = it.priority,
+                        dueDate = it.dueDate,
+                        reminderTime = it.reminderTime
+                    )
+                }
 
             } catch (e: Exception) {
-                println("❌ AI Task Fetching Error: ${e.message}")
+                println("\u274C AI Task Fetching Error: ${e.message}")
                 emptyList()
             }
         }
     }
+
 
     fun extractJsonContent(responseText: String): String {
         val jsonStart = responseText.indexOf("{")  // First '{' in response
@@ -376,6 +467,15 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
         } else {
             "{}"  // Fallback to empty JSON if parsing fails
         }
+    }
+    fun extractJsonContentImproved(content: String): String {
+        return content
+            .substringAfter("```json", "")
+            .substringBefore("```", "")
+            .ifBlank { content }
+            .trim()
+            .replace(Regex(""",\s*\}"""), "}") // Remove trailing comma before }
+            .replace(Regex(""",\s*\]"""), "]") // Remove trailing comma before ]
     }
     private fun validateAndFixDate(dateString: String): String {
         val today = LocalDate.now()

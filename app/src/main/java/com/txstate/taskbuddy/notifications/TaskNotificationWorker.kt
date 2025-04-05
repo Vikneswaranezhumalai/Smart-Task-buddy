@@ -63,4 +63,35 @@ class TaskNotificationWorker(appContext: Context, workerParams: WorkerParameters
         // Show the notification
         notificationManager.notify(1, notification) // Notification ID = 1
     }
+
+    companion object {
+        fun sendBadgeUnlockedNotification(context: Context, badgeName: String) {
+            val channelId = "badge_channel"
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channel = NotificationChannel(
+                    channelId,
+                    "Badge Notifications",
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = "Notifications for unlocked badges"
+                }
+                val manager = context.getSystemService(NotificationManager::class.java)
+                manager.createNotificationChannel(channel)
+            }
+
+            val notification = NotificationCompat.Builder(context, channelId)
+                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .setContentTitle("🏅 New Badge Unlocked!")
+                .setContentText("You’ve unlocked the '$badgeName' badge.")
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setAutoCancel(true)
+                .build()
+
+            val notificationManager =
+                context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.notify(badgeName.hashCode(), notification)
+        }
+
+    }
+
 }

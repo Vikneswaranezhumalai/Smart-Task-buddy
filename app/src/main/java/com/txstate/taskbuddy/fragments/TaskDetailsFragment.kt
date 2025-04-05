@@ -85,7 +85,7 @@ class TaskDetailsFragment : Fragment() {
 
     private fun onMarkCompleted(task: Task) {
         val updatedTask = task.copy(priority = "Completed")  // Set priority as "Completed"
-        taskViewModel.updateTaskStatus(updatedTask)
+        taskViewModel.updateTaskStatus(updatedTask,requireActivity())
         requireActivity().supportFragmentManager.popBackStack()
         Toast.makeText(context, "Task marked as completed", Toast.LENGTH_SHORT).show()
     }

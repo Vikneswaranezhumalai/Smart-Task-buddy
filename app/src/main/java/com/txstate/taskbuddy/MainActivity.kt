@@ -27,7 +27,7 @@ class MainActivity : AppCompatActivity() {
         setContent {
             val userRepository = UserRepository(TaskDatabase.getDatabase(this).userDao())
             userViewModel = ViewModelProvider(this).get(TaskViewModel::class.java)
-
+            println("Build Config Flavor: ${BuildConfig.OPENAI_API_KEY}")
             authManager = AuthManager(this, userRepository)
             var activtyStack = "DEFALUT";
             // Check if the user is logged in
