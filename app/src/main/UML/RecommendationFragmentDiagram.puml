@@ -1,0 +1,41 @@
+@startuml
+
+package com.txstate.taskbuddy.fragments {
+
+    class RecommendationFragment {
+        -taskViewModel: TaskViewModel
+        -isProcessingState: MutableState<Boolean>
+
+        +onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View
+        +RecommendationScreen(taskViewModel: TaskViewModel): @Composable
+        +RecommendationCard(task: Task, onAdd: () -> Unit): @Composable
+    }
+
+    class TaskViewModel {
+        +recommendedTasks: State<List<Task>>
+        +errorMessage: State<String?>
+        +loadRecommendations(): void
+        +getLoggedInUser(): User?
+        +addTask(context: Context, task: Task): void
+    }
+
+    class Task {
+        +taskName: String
+        +category: String
+        +reminderTime: String
+        +priority: String
+        +dueDate: String
+        +userId: Int
+    }
+
+    class User {
+        +id: Int
+    }
+
+    RecommendationFragment --> TaskViewModel : uses
+    RecommendationFragment --> Task : creates
+    TaskViewModel --> Task : manages
+    RecommendationFragment --> TaskViewModel : interacts
+}
+
+@enduml

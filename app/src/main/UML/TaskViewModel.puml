@@ -1,0 +1,70 @@
+@startuml
+
+package com.txstate.taskbuddy {
+
+    class TaskViewModel {
+        -taskRepository: TaskRepository
+        -userRepository: UserRepository
+        -authManager: AuthManager
+        -userId: Int
+        -_badgeUnlocked: MutableStateFlow<Boolean>
+        -_unlockedBadges: MutableStateFlow<List<String>>
+        -_recommendedTasks: MutableStateFlow<List<Task>>
+        -_errorMessage: MutableStateFlow<String?>
+
+        +badgeUnlocked: StateFlow<Boolean>
+        +unlockedBadges: StateFlow<List<String>>
+        +recommendedTasks: StateFlow<List<Task>>
+        +errorMessage: StateFlow<String?>
+
+        +addTask(context: Context, task: Task): void
+        +getLoggedInUser(): Users?
+        +addTask(context: Context, task: Task): void
+        +refreshBadgeStatus(userId: Int): void
+        +getTaskById(taskId: Int): LiveData<Task>
+        +updateTaskStatus(task: Task, context: Context): void
+        +deleteTask(task: Task): void
+        +loadRecommendations(): void
+        +processNaturalInput(input: String, onSuccess: (Task) -> Unit, onError: (String) -> Unit): void
+        +deleteAllUsers(): void
+        +fetchFrequentCategories(onResult: (List<String>) -> Unit): void
+    }
+
+    class TaskRepository {
+        +insertTask(task: Task): void
+        +getAllTasks(userId: Int): LiveData<List<Task>>
+        +getCompletedTask(userId: Int): LiveData<List<Task>>
+        +getCompletedTaskCount(userId: Int): Int
+        +getTaskById(taskId: Int): LiveData<Task>
+        +updateTask(task: Task): void
+        +deleteTask(task: Task): void
+        +getFrequentCategories(lastMonthDate: String): List<CategorySummary>
+    }
+
+    class Task {
+        +taskName: String
+        +category: String
+        +reminderTime: String
+        +priority: String
+        +dueDate: String
+        +userId: Int
+    }
+
+    class Users {
+        +id: Int
+    }
+
+    class CategorySummary {
+        +category: String
+        +taskCount: Int
+    }
+
+    TaskViewModel --> TaskRepository : uses
+    TaskViewModel --> Task : creates
+    TaskViewModel --> Users : manages
+    TaskRepository --> CategorySummary : fetches
+    TaskViewModel --> AuthManager : uses
+
+}
+
+@enduml
