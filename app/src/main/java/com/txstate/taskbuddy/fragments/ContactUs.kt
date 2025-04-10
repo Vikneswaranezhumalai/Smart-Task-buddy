@@ -82,18 +82,42 @@ fun ContactUsScreen() {
                     style = MaterialTheme.typography.body1,
                     textAlign = TextAlign.Center
                 )
+                // ======== MODIFICATIONS BY Arpita Chowdhury START ========
+                Spacer(modifier = Modifier.height(10.dp))  // Adds spacing above new section
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Divider(thickness = 1.dp)  // Adds visual separation
+
+                Text(
+                    text = "📞 (512) 245-0000", // Random Number
+                    style = MaterialTheme.typography.body2.copy(fontWeight = FontWeight.Medium)
+                )
+
+                Text(
+                    text = "📞 (510) 275-1070", // Random Number
+                    style = MaterialTheme.typography.body2.copy(fontWeight = FontWeight.Medium)
+                )
 
                 Text(
                     text = "📧 vyv15@txstate.edu",
-                    style = MaterialTheme.typography.body2
+                    style = MaterialTheme.typography.body2.copy(fontWeight = FontWeight.Medium)
+                )
+
+                Text(
+                    text = "📧 hfx14@txstate.edu",
+                    style = MaterialTheme.typography.body2.copy(fontWeight = FontWeight.Medium)
                 )
 
                 Text(
                     text = "🕒 Support Hours: 9 AM – 5 PM (CST)",
-                    style = MaterialTheme.typography.body2
+                    style = MaterialTheme.typography.body2.copy(fontWeight = FontWeight.Medium)
                 )
+
+                Text(
+                    text = "📍 Texas State University, San Marcos, TX",
+                    style = MaterialTheme.typography.caption,
+                    textAlign = TextAlign.Center
+                )
+                // ======== MODIFICATIONS BY Arpita Chowdhury END ========
             }
         }
     }
