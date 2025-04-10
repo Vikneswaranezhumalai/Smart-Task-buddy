@@ -1,0 +1,44 @@
+@startuml
+
+package com.txstate.taskbuddy.fragments {
+
+    class TaskListFragment {
+        -taskViewModel: TaskViewModel
+        -authManager: AuthManager
+        +onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View
+        +TaskListFragmentContent(): @Composable
+        +DropdownSelector(selected: String, options: List<String>, onSelected: (String) -> Unit): @Composable
+        +QuickSuggestionBanner(onClick: () -> Unit): @Composable
+        +TaskItem(task: Task, onClick: (Task) -> Unit): @Composable
+    }
+
+    class TaskViewModel {
+        +getAllTasks: LiveData<List<Task>>
+    }
+
+    class Task {
+        +taskName: String
+        +description: String
+        +priority: String
+        +category: String
+        +dueDate: String
+        +reminderTime: String
+    }
+
+    class AuthManager {
+        +getLoggedInUser(): Users?
+    }
+
+    class Users {
+        +name: String
+    }
+
+    TaskListFragment --> TaskViewModel : uses
+    TaskListFragment --> Task : displays
+    TaskListFragment --> AuthManager : uses
+    TaskViewModel --> Task : manages
+    TaskListFragment --> Users : interacts
+
+}
+
+@enduml

@@ -1,0 +1,35 @@
+@startuml
+
+package com.txstate.taskbuddy.fragments {
+
+    class TaskDetailsFragment {
+        -taskViewModel: TaskViewModel
+        -taskId: Int
+
+        +onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View
+        +onMarkCompleted(task: Task): void
+        +onDelete(task: Task): void
+        +TaskDetailsFragmentContent(task: Task, onMarkCompleted: (Task) -> Unit, onDelete: (Task) -> Unit): @Composable
+    }
+
+    class TaskViewModel {
+        +getTaskById(taskId: Int): LiveData<Task>
+        +updateTaskStatus(task: Task, context: Context): void
+        +deleteTask(task: Task): void
+    }
+
+    class Task {
+        +taskName: String
+        +description: String
+        +priority: String
+        +category: String
+        +dueDate: String
+        +reminderTime: String
+    }
+
+    TaskDetailsFragment --> TaskViewModel : uses
+    TaskViewModel --> Task : manages
+    TaskDetailsFragment --> Task : interacts
+}
+
+@enduml

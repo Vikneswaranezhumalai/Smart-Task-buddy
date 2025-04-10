@@ -58,7 +58,7 @@ class TaskDeletedFragment : Fragment(){
             Column {
                 // Toolbar
                 CommonToolbar(
-                    title = "Cancelled Task History",
+                    title = "Deleted Task History",
                     navigationIcon = Icons.Default.ArrowBack,
                     onBackButtonClick = {
                         requireActivity().supportFragmentManager.popBackStack()

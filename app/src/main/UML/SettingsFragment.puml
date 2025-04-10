@@ -1,0 +1,37 @@
+@startuml
+
+package com.txstate.taskbuddy.fragments {
+
+    class SettingFragment {
+        -taskViewModel: TaskViewModel
+        -authManager: AuthManager
+        -allBadges: List<String>
+
+        +onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View
+        +BadgeGallery(unlockedBadges: List<String>): @Composable
+        +SettingFragmentContent(): @Composable
+        +SettingOption(icon: ImageVector, title: String, onClick: () -> Unit): @Composable
+    }
+
+    class TaskViewModel {
+        +unlockedBadges: StateFlow<List<String>>
+        +refreshBadgeStatus(userId: Int): void
+    }
+
+    class AuthManager {
+        +getLoggedInUser(): Users?
+    }
+
+    class Users {
+        +name: String
+        +email: String
+    }
+
+    SettingFragment --> TaskViewModel : uses
+    SettingFragment --> AuthManager : uses
+    TaskViewModel --> Users : manages
+    SettingFragment --> Users : interacts
+
+}
+
+@enduml

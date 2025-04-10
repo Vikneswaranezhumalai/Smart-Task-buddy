@@ -97,7 +97,7 @@ class AddTaskFragment : Fragment() {
                             )
                         }
                     } else {
-                        println("Loading state: isProcessingState false")
+                        println("Loading state: isProcessingState is false")
                     }
 
                 }
