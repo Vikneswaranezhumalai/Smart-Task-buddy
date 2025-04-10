@@ -1,0 +1,28 @@
+@startuml
+
+package com.txstate.taskbuddy.fragments {
+
+    class AddTaskFragment {
+        -taskViewModel: TaskViewModel
+        -voiceRecognitionLauncher: ActivityResultLauncher<Intent>
+        -naturalInputState: MutableState<String>
+        -isProcessingState: MutableState<Boolean>
+        -priorities: List<String>
+        -categories: List<String>
+
+        +onCreate(savedInstanceState: Bundle?): void
+        +onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View
+        -startVoiceRecognition(): void
+        -processVoiceInput(input: String): void
+        -processTaskInput(input: String, coroutineScope: CoroutineScope, context: Context, taskViewModel: TaskViewModel, onComplete: (Task) -> Unit): void
+        +AddTaskFragmentContent(): @Composable
+    }
+
+    class TaskViewModel
+    class Task
+
+    AddTaskFragment --> TaskViewModel : uses
+    AddTaskFragment --> Task : creates
+}
+
+@enduml
